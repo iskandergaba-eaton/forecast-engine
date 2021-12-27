@@ -1,3 +1,4 @@
+from datetime import timedelta
 import os
 
 import util
@@ -20,11 +21,11 @@ class ForecastEngine:
     HORIZON_MID = 1
     HORIZON_LONG = 0
 
-    # lol
-    _horizons = {0: 180, 1: 168, 2: 144}
+    # Parameter dictionaries
+    _horizons = {0: timedelta(days=180), 1: timedelta(days=30), 2: timedelta(days=7)}
+    _test_sizes = {0: timedelta(days=90), 1: timedelta(days=30), 2: timedelta(days=7)}
     _freqs = {0: '2H', 1: 'H', 2: '10min'}
-    _storage_sizes = {0: 360, 1: 360, 2: 1008}
-    _splits = {0: 180, 1: 360, 2: 2160}
+    _storage_sizes = {0: timedelta(days=180), 1: timedelta(days=90), 2: timedelta(days=7)}
 
     def __init__(self, root):
         self.root = root
@@ -38,7 +39,7 @@ class ForecastEngine:
         model = None
         if len(periods) > 0:
             model = sm.forecasting.stl.STLForecast(
-                ts, sm.arima.model.ARIMA, model_kwargs=dict(order=(1,1,1), trend="t"), period=periods[0])
+                ts, sm.arima.model.ARIMA, model_kwargs=dict(order=(1,1,1)), period=periods[0])
         else:
             model = sm.arima.model.ARIMA(ts, order=(1, 1, 1))
 
@@ -46,7 +47,7 @@ class ForecastEngine:
         pred = result.get_prediction(start=start_future, end=end_future).summary_frame(alpha=alpha)
         return pred
 
-    def _server(self, dc, horizon, save_dir='results'):
+    def _server(self, dc, horizon, save_dir='.results'):
         h = self._horizons[horizon]
         f = self._freqs[horizon]
 
@@ -66,15 +67,14 @@ class ForecastEngine:
             # Preprocessing
             ts_power = df['power']
             ts_power.index.freq = f
-            split = len(ts_power) - self._splits[horizon]
-            ts_power = util.fill_gaps(ts_power)
+            split = ts_power.index[-1] - self._test_sizes[horizon]
 
             ts_power_train = ts_power[:split]
-            ts_power_test = ts_power[split:split+h]
+            ts_power_test = ts_power[split:]
 
             # Forecasting
             pred = self._forecast(
-                ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[-1], alpha=0.05)
+                ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[0] + h, alpha=0.05)
             fcast, fcast_low, fcast_up = pred['mean'], pred['mean_ci_lower'], pred['mean_ci_upper']
 
             # Aggregate forecasts
@@ -87,7 +87,7 @@ class ForecastEngine:
 
         return fcast_agg, fcast_agg_low, fcast_agg_up
 
-    def _smart(self, dc, horizon, save_dir='results'):
+    def _smart(self, dc, horizon, save_dir='.results'):
         h = self._horizons[horizon]
         f = self._freqs[horizon]
 
@@ -107,15 +107,14 @@ class ForecastEngine:
 
             # Preprocessing
             ts_power.index.freq = f
-            split = len(ts_power) - self._splits[horizon]
-            ts_power = util.fill_gaps(ts_power)
+            split = ts_power.index[-1] - self._test_sizes[horizon]
 
             ts_power_train = ts_power[:split]
-            ts_power_test = ts_power[split:split+h]
+            ts_power_test = ts_power[split:]
 
             # Forecasting
             pred = self._forecast(
-                ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[-1], alpha=0.05)
+                ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[0] + h, alpha=0.05)
             fcast, fcast_low, fcast_up = pred['mean'], pred['mean_ci_lower'], pred['mean_ci_upper']
 
             # Aggregate forecasts
@@ -128,7 +127,7 @@ class ForecastEngine:
 
         return fcast_agg, fcast_agg_low, fcast_agg_up
 
-    def _dc(self, dc, horizon, save_dir='results'):
+    def _dc(self, dc, horizon, save_dir='.results'):
         h = self._horizons[horizon]
         f = self._freqs[horizon]
 
@@ -142,20 +141,20 @@ class ForecastEngine:
         # Preprocessing
         ts_power = df['power']
         ts_power.index.freq = f
-        split = len(ts_power) - self._splits[horizon]
-        ts_power = util.fill_gaps(ts_power)
 
+        # Train-test split
+        split = ts_power.index[-1] - self._test_sizes[horizon]
         ts_power_train = ts_power[:split]
-        ts_power_test = ts_power[split:split+h]
+        ts_power_test = ts_power[split:]
 
         # Forecasting
         pred = self._forecast(
-            ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[-1], alpha=0.05)
+            ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[0] + h, alpha=0.05)
 
         fcast, fcast_low, fcast_up = pred['mean'], pred['mean_ci_lower'], pred['mean_ci_upper']
         return fcast, fcast_low, fcast_up
 
-    def _server_hybrid(self, dc, horizon, save_dir='results'):
+    def _server_hybrid(self, dc, horizon, save_dir='.results'):
         # Create save directory if it does not exist
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -180,10 +179,9 @@ class ForecastEngine:
                 # Preprocessing
                 ts_power = df['power']
                 ts_power.index.freq = f
-                ts_power = util.fill_gaps(ts_power)
 
-                # Split the into train-test
-                split = len(ts_power) - self._splits[i]
+                # Train-test split
+                split = ts_power.index[-1] - self._test_sizes[i]
                 ts_power_train = ts_power.copy()[:split] if ts_power_old is None else ts_power.copy()[split-size:split]
                 ts_power_test = ts_power.copy()[split:split+h]
 
@@ -198,7 +196,7 @@ class ForecastEngine:
 
                 # Forecasting
                 pred = self._forecast(
-                    ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[-1], alpha=0.05)
+                    ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[0] + h, alpha=0.05)
                 fcast, fcast_low, fcast_up = pred['mean'], pred['mean_ci_lower'], pred['mean_ci_upper']
 
                 # Processing forecast
@@ -237,7 +235,7 @@ class ForecastEngine:
 
         return fcast_acc, fcast_acc_low, fcast_acc_up
 
-    def _smart_hybrid(self, dc, horizon, save_dir='results'):
+    def _smart_hybrid(self, dc, horizon, save_dir='.results'):
         # Create save directory if it does not exist
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -265,11 +263,10 @@ class ForecastEngine:
                 # Preprocessing
                 ts_power = df['power']
                 ts_power.index.freq = f
-                ts_power = util.fill_gaps(ts_power)
 
-                # Split the residual into train-test
-                split = len(ts_power) - self._splits[i]
-                ts_power_train = ts_power.copy()[split-size:split] if g in fcast_old else ts_power.copy()[:split]
+                # Train-test split
+                split = ts_power.index[-1] - self._test_sizes[i]
+                ts_power_train = ts_power.copy()[:split] if ts_power_old is None else ts_power.copy()[split-size:split]
                 ts_power_test = ts_power.copy()[split:split+h]
 
                 # Preprocessing
@@ -283,7 +280,7 @@ class ForecastEngine:
 
                 # Forecasting
                 pred = self._forecast(
-                    ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[-1], alpha=0.05)
+                    ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[0] + h, alpha=0.05)
                 fcast, fcast_low, fcast_up = pred['mean'], pred['mean_ci_lower'], pred['mean_ci_upper']
 
                 # Processing forecast
@@ -303,6 +300,7 @@ class ForecastEngine:
                     configs[i] = (fcast, fcast_low, fcast_up)
                 else:
                     fcast_acc, fcast_acc_low, fcast_acc_up = configs[i]
+
                     # Reindex for different lengths of time series
                     if len(fcast_acc) < len(fcast):
                         fcast_acc = fcast_acc.reindex(index=fcast.index, fill_value=0)
@@ -324,7 +322,7 @@ class ForecastEngine:
 
         return configs[horizon]
 
-    def _dc_hybrid(self, dc, horizon, save_dir='results'):
+    def _dc_hybrid(self, dc, horizon, save_dir='.results'):
         # Create save directory if it does not exist
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -343,7 +341,12 @@ class ForecastEngine:
             ts_power = util.fill_gaps(ts_power)
 
             # Split into train-test
-            split = len(ts_power) - self._splits[i]
+            split = ts_power.index[-1] - self._test_sizes[i]
+            ts_power_train = ts_power.copy()[:split] if ts_power_old is None else ts_power.copy()[split-size:split]
+            ts_power_test = ts_power.copy()[split:split+h]
+
+            # Train-test split
+            split = ts_power.index[-1] - self._test_sizes[i]
             ts_power_train = ts_power.copy()[:split] if ts_power_old is None else ts_power.copy()[split-size:split]
             ts_power_test = ts_power.copy()[split:split+h]
 
@@ -359,7 +362,7 @@ class ForecastEngine:
 
             # Forecasting
             pred = self._forecast(
-                ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[-1], alpha=0.05)
+                ts_power_train, start_future=ts_power_test.index[0], end_future=ts_power_test.index[0] + h, alpha=0.05)
             fcast, fcast_low, fcast_up = pred['mean'], pred['mean_ci_lower'], pred['mean_ci_upper']
 
             # Handling NaN edge case

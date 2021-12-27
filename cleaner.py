@@ -1,8 +1,10 @@
 import os
 import pandas as pd
 
+from util import fill_gaps
+
 root_dirty, root_clean = '../data/dirty', '../data/clean'
-versions = ['05-05-2021', '25-05-2021', '05-07-2021']
+versions = ['20-12-2021']
 min_timestamp, max_timestamp = {}, {}
 
 files_dirty = []
@@ -33,9 +35,9 @@ for filename in files_dirty:
 
     min_t, max_t = min(df['timestamp']), max(df['timestamp'])
 
-    min_timestamp[dc] = min(min_t, min_timestamp[dc]
-                            ) if dc in min_timestamp else min_t
-    #max_timestamp[dc] = max(max_t, max_timestamp[dc]) if dc in max_timestamp else max_t
+    #min_timestamp[dc] = min(min_t, min_timestamp[dc]) if dc in min_timestamp else min_t
+    max_timestamp[dc] = max(max_t, max_timestamp[dc]
+                            ) if dc in max_timestamp else max_t
 
     if dc in max_timestamp:
         max_timestamp[dc] = min(max_t, max_timestamp[dc]) if str(
@@ -81,8 +83,8 @@ for filename in files_dirty:
     df.sort_index(inplace=True)
 
     # Fill gaps via interpolation
-    interpol_method = 'time'
     df = df.resample('10T').mean().round(2)
+    df['power'] = fill_gaps(df['power'])
 
     # Ignore server if the recording length is not enough
     dc = os.path.split(save_dir)[1]

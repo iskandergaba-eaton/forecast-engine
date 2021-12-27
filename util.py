@@ -2,6 +2,10 @@
 import os
 import math
 
+# Accelerate Scikit-learn with Intel extension: https://intel.github.io/scikit-learn-intelex
+from sklearnex import patch_sklearn
+patch_sklearn()
+
 # Mertrics
 from sklearn.metrics import r2_score, median_absolute_error, mean_absolute_error
 from sklearn.metrics import mean_squared_error
@@ -19,8 +23,6 @@ rcParams['figure.figsize'] = 18, 8
 
 # IO
 ## Get server filenames for a datacenter
-
-
 def get_servers(root, dc):
     filenames = []
     for path, _, files in os.walk('{}/{}'.format(root, dc)):
@@ -29,8 +31,6 @@ def get_servers(root, dc):
     return filenames
 
 ## Load a time series
-
-
 def load_file(filename, freq='H'):
     data = pd.read_csv(filename)
     data.rename({'Unnamed: 0': 'timestamp'}, axis=1, inplace=True)
@@ -51,8 +51,6 @@ def load_file(filename, freq='H'):
     return data
 
 ## Load multiple time series
-
-
 def load_files(filenames, freq='H'):
     df = pd.DataFrame()
     for name in filenames:
@@ -73,8 +71,6 @@ def load_files(filenames, freq='H'):
     return df
 
 ## Load time series data for a dataceter
-
-
 def load_data(root, dc, freq='H'):
     # Get server filenames
     filenames = get_servers(root, dc)
@@ -82,8 +78,6 @@ def load_data(root, dc, freq='H'):
     return load_files(filenames, freq)
 
 ## Cluster servers based on their seasonality
-
-
 def group_servers(filenames, horizon, freq, load=True):
     groups = {}
     for name in filenames:
@@ -93,7 +87,7 @@ def group_servers(filenames, horizon, freq, load=True):
         # Preprocess
         ts_power = df['power']
         ts_power.index.freq = freq
-        ts_power_train = ts_power[:-horizon]
+        ts_power_train = ts_power[:ts_power.index[-1] - horizon]
 
         # Get periods
         periods = get_periods(ts_power_train, all=False)
@@ -130,8 +124,6 @@ def group_servers(filenames, horizon, freq, load=True):
 
 # Time series gap handling
 # Handle gaps
-
-
 def fill_gaps(ts):
     ts_periods = ts.copy().interpolate(method='time').round(2).fillna(0)
     periods = get_periods(ts_periods, min_strength=0.6, all=False)
@@ -154,12 +146,10 @@ def fill_gaps(ts):
                                                           period: s - period + l].values
                     s += l
                     length -= l
-    ts_work = ts_work.interpolate(method='time').round(2).fillna(0)
+    ts_work = ts_work.interpolate(method='time').round(2)
     return ts_work
 
 # Detect gaps
-
-
 def _detect_gaps(ts):
     ts_work = ts.copy()
     ts_work[ts_work < 0] = np.nan
@@ -168,7 +158,6 @@ def _detect_gaps(ts):
     blocks = ts_work.diff().notna().cumsum()
     out = na_groups.index.to_frame().groupby(
         blocks)['timestamp'].agg(['min', 'max'])
-    #out['max'] += timedelta(hours=freq_delta[freq]) if freq_unit[freq] == 'hours' else timedelta(minutes=freq_delta[freq])
     out.reset_index(inplace=True)
     out.rename({'min': 'start', 'max': 'end'}, axis=1, inplace=True)
     out.drop('power', axis=1, inplace=True)
@@ -187,33 +176,25 @@ def is_stationary(ts, sig_level=0.05, trend_stationary=False):
     return adf_pval < sig_level and kpss_pval >= sig_level
 
 # Time series component strength
-
-
 def _component_strength(component, residual):
     return max(0, 1 - np.var(residual) / np.var(component + residual))
 
 # Seasonality strength
-
-
 def seasonality_strength(decomp):
     return _component_strength(decomp.seasonal.values, decomp.resid.values)
 
 # Trend strength
-
-
 def trend_strength(decomp):
     return _component_strength(decomp.trend.values, decomp.resid.values)
 
 # Seasonality periods detection
-
-
 def get_periods(ts, min_strength=0.6, all=True):
     ts_work = ts.copy()
     periods = []
 
     while True:
         p, max_acf = None, -np.inf
-        acf = sm.tsa.stattools.acf(ts_work, nlags=len(ts_work))
+        acf = sm.tsa.stattools.acf(ts_work, nlags=len(ts_work), fft=True)
 
         for i in range(1, len(acf) // 2):
             # Check i has not been previously detected
@@ -263,21 +244,15 @@ def get_periods(ts, min_strength=0.6, all=True):
     return periods
 
 # MAPE function
-
-
 def mean_absolute_percentage_error(y_true, y_pred):
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
 # Validation metrics
-
-
 def forecast_report(forecast, ts_test):
     return round(r2_score(ts_test, forecast), 2), round(mean_absolute_error(ts_test, forecast), 2), round(mean_squared_error(ts_test, forecast), 2), round(mean_absolute_percentage_error(
         ts_test, forecast), 2), round(median_absolute_error(ts_test, forecast), 2)
 
 # Plotting
-
-
 def plot_fcast(train, test, fcast, xlabel, ylabel, title, legend=['Observed Past', 'Observed Future', 'Forecast'], filename='fig.png', ci=False, fcast_low=None, fcast_up=None):
     plt.figure()
     ax = train.plot(label=legend[0])
