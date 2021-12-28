@@ -17,22 +17,24 @@ class ForecastEngine:
     GRANULARITY_DC = 2
 
     # Forecast horizons
-    HORIZON_SHORT = 2
-    HORIZON_MID = 1
-    HORIZON_LONG = 0
+    HORIZON_1 = 4
+    HORIZON_7 = 3
+    HORIZON_30 = 2
+    HORIZON_90 = 1
+    HORIZON_180 = 0
 
     # Parameter dictionaries
-    _horizons = {0: timedelta(days=180), 1: timedelta(days=30), 2: timedelta(days=7)}
-    _test_sizes = {0: timedelta(days=90), 1: timedelta(days=30), 2: timedelta(days=7)}
-    _freqs = {0: '2H', 1: 'H', 2: '10min'}
-    _storage_sizes = {0: timedelta(days=180), 1: timedelta(days=90), 2: timedelta(days=7)}
+    _horizons = {0: timedelta(days=180), 1: timedelta(days=90), 2: timedelta(days=30), 3: timedelta(days=7), 4: timedelta(days=1)}
+    _test_sizes = {0: timedelta(days=90), 1: timedelta(days=90), 2: timedelta(days=30), 3: timedelta(days=7), 4: timedelta(days=1)}
+    _freqs = {0: '12H', 1: '6H', 2: '2H', 3: 'H', 4: '10min'}
+    _storage_sizes = {0: timedelta(days=180), 1: timedelta(days=180), 2: timedelta(days=90), 3: timedelta(days=30), 4: timedelta(days=15)}
 
     def __init__(self, root):
         self.root = root
     
     def _forecast(self, ts, start_future, end_future, alpha=0.05):
         # Get seasonality periods
-        ts_periods = ts.copy().interpolate(method='time').round(2).fillna(0)
+        ts_periods = ts.copy()
         periods = util.get_periods(ts_periods, min_strength=0.5, all=False)
         print('Periods:', periods)
 
@@ -41,7 +43,7 @@ class ForecastEngine:
             model = sm.forecasting.stl.STLForecast(
                 ts, sm.arima.model.ARIMA, model_kwargs=dict(order=(1,1,1)), period=periods[0])
         else:
-            model = sm.arima.model.ARIMA(ts, order=(1, 1, 1))
+            model = sm.arima.model.ARIMA(ts, order=(1,1,1))
 
         result = model.fit()
         pred = result.get_prediction(start=start_future, end=end_future).summary_frame(alpha=alpha)
@@ -244,8 +246,8 @@ class ForecastEngine:
         filenames = util.get_servers(self.root, dc)
 
         # Longest horizon to be used for grouping
-        h = self._horizons[self.HORIZON_LONG]
-        f = self._freqs[self.HORIZON_LONG]
+        h = self._horizons[self.HORIZON_180]
+        f = self._freqs[self.HORIZON_180]
         groups = util.group_servers(filenames, h, f, load=False)
 
         ts_power_old, fcast_old, fcast_old_low , fcast_old_up = {}, {}, {}, {}

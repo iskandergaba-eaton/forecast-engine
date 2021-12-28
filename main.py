@@ -17,10 +17,10 @@ if __name__ == "__main__":
     root, dc = '../data/clean/{0}'.format(versions[-1]), DCs[0]
     figname = '.results/{0}.png'.format(dc)
 
-    horizon_key = ForecastEngine.HORIZON_MID
+    horizon_key = ForecastEngine.HORIZON_30
 
     oracle = ForecastEngine(root=root)
-    fcast, fcast_low, fcast_up = oracle.forecast(dc=dc, approach=ForecastEngine.APPROACH_HYBRID,
+    fcast, fcast_low, fcast_up = oracle.forecast(dc=dc, approach=ForecastEngine.APPROACH_REGULAR,
                                                  granularity=ForecastEngine.GRANULARITY_DC, horizon=horizon_key)
 
     df = load_data(root, dc, freq=fcast.index.freq)
@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     horizon, size, split = ForecastEngine._horizons[horizon_key], ForecastEngine._storage_sizes[horizon_key], ts_power.index[-1] - ForecastEngine._test_sizes[horizon_key]
 
-    ts_power_train = ts_power[:split] if horizon_key == ForecastEngine.HORIZON_LONG else ts_power[split - size:split]
+    ts_power_train = ts_power[:split] if horizon_key == ForecastEngine.HORIZON_180 else ts_power[split - size:split]
     ts_power_test = ts_power.copy()[split:]
 
     ax = ts_power_train.plot(label='Observed Past')
