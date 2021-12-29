@@ -342,11 +342,6 @@ class ForecastEngine:
             ts_power.index.freq = f
             ts_power = util.fill_gaps(ts_power)
 
-            # Split into train-test
-            split = ts_power.index[-1] - self._test_sizes[i]
-            ts_power_train = ts_power.copy()[:split] if ts_power_old is None else ts_power.copy()[split-size:split]
-            ts_power_test = ts_power.copy()[split:split+h]
-
             # Train-test split
             split = ts_power.index[-1] - self._test_sizes[i]
             ts_power_train = ts_power.copy()[:split] if ts_power_old is None else ts_power.copy()[split-size:split]
