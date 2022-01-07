@@ -165,10 +165,12 @@ class ForecastEngine:
 
         filenames = util.get_servers(self.root, dc)
         fcast_acc, fcast_acc_low, fcast_acc_up = None, None, None
+        horizon_target = self._horizons[horizon]
 
         for name in filenames:
 
             ts_power_old, fcast_old, fcast_old_low, fcast_old_up = None, None, None, None
+            fcast, fcast_low, fcast_up = None, None, None
 
             for i in range(horizon + 1):
                 h = self._horizons[i]
@@ -184,7 +186,7 @@ class ForecastEngine:
 
                 # Train-test split
                 split = ts_power.index[-1] - self._test_sizes[i]
-                ts_power_train = ts_power.copy()[:split] if ts_power_old is None else ts_power.copy()[split-size:split]
+                ts_power_train = ts_power.copy()[:split] if i == self.HORIZON_180 else ts_power.copy()[split-size:split]
                 ts_power_test = ts_power.copy()[split:split+h]
 
                 # Preprocessing
@@ -202,6 +204,10 @@ class ForecastEngine:
                 fcast, fcast_low, fcast_up = pred['mean'], pred['mean_ci_lower'], pred['mean_ci_upper']
 
                 # Processing forecast
+                fcast = fcast[:fcast.index[0] + horizon_target]
+                fcast_low = fcast_low[:fcast_low.index[0] + horizon_target]
+                fcast_up = fcast_up[:fcast.index[0] + horizon_target]
+
                 if fcast_old is not None:
                     fcast_old = fcast_old.copy().resample(f).mean().interpolate(
                         'time').reindex(index=fcast.index, method='nearest')
@@ -213,28 +219,28 @@ class ForecastEngine:
                     fcast_low += fcast_old_low
                     fcast_up += fcast_old_up
 
-                # Aggregate forecasts
-                if fcast_acc is not None:
-                    # Reindex for different lengths of time series
-                    if len(fcast_acc) < len(fcast):
-                        fcast_acc = fcast_acc.reindex(index=fcast.index, fill_value=0)
-                        fcast_acc_low = fcast_acc_low.reindex(index=fcast_low.index, fill_value=0)
-                        fcast_acc_up = fcast_acc_up.reindex(index=fcast_up.index, fill_value=0)
-                    else:
-                        fcast = fcast.reindex(index=fcast_acc.index, fill_value=0)
-                        fcast_low = fcast_low.reindex(index=fcast_acc_low.index, fill_value=0)
-                        fcast_up = fcast_up.reindex(index=fcast_acc_up.index, fill_value=0)
-                    fcast_acc = fcast_acc.add(fcast)
-                    fcast_acc_low = fcast_acc_low.add(fcast_low)
-                    fcast_acc_up = fcast_acc_up.add(fcast_up)
-                else:
-                    fcast_acc, fcast_acc_low, fcast_acc_up = fcast, fcast_low, fcast_up
-
                 # Storing old forecast
                 fcast_old = fcast.copy()
                 fcast_old_low = fcast_low.copy()
                 fcast_old_up = fcast_up.copy()
 
+            # Aggregate forecasts
+            if fcast_acc is not None:
+                # Reindex for different lengths of time series
+                if len(fcast_acc) < len(fcast):
+                    fcast_acc = fcast_acc.reindex(index=fcast.index, fill_value=0)
+                    fcast_acc_low = fcast_acc_low.reindex(index=fcast_low.index, fill_value=0)
+                    fcast_acc_up = fcast_acc_up.reindex(index=fcast_up.index, fill_value=0)
+                else:
+                    fcast = fcast.reindex(index=fcast_acc.index, fill_value=0)
+                    fcast_low = fcast_low.reindex(index=fcast_acc_low.index, fill_value=0)
+                    fcast_up = fcast_up.reindex(index=fcast_acc_up.index, fill_value=0)
+                fcast_acc = fcast_acc.add(fcast)
+                fcast_acc_low = fcast_acc_low.add(fcast_low)
+                fcast_acc_up = fcast_acc_up.add(fcast_up)
+            else:
+                fcast_acc, fcast_acc_low, fcast_acc_up = fcast.copy(), fcast_low.copy(), fcast_up.copy()
+            
         return fcast_acc, fcast_acc_low, fcast_acc_up
 
     def _smart_hybrid(self, dc, horizon, save_dir='.results'):
@@ -268,7 +274,7 @@ class ForecastEngine:
 
                 # Train-test split
                 split = ts_power.index[-1] - self._test_sizes[i]
-                ts_power_train = ts_power.copy()[:split] if ts_power_old is None else ts_power.copy()[split-size:split]
+                ts_power_train = ts_power.copy()[:split] if i == self.HORIZON_180 else ts_power.copy()[split-size:split]
                 ts_power_test = ts_power.copy()[split:split+h]
 
                 # Preprocessing
@@ -317,6 +323,9 @@ class ForecastEngine:
                     fcast_acc_low = fcast_acc_low.add(fcast_low)
                     fcast_acc_up = fcast_acc_up.add(fcast_up)
 
+                    # Update accumulated forecasts
+                    configs[i] = (fcast_acc, fcast_acc_low, fcast_acc_up)
+
                 # Storing old forecast
                 fcast_old[g] = fcast.copy()
                 fcast_old_low[g] = fcast_low.copy()
@@ -344,7 +353,7 @@ class ForecastEngine:
 
             # Train-test split
             split = ts_power.index[-1] - self._test_sizes[i]
-            ts_power_train = ts_power.copy()[:split] if ts_power_old is None else ts_power.copy()[split-size:split]
+            ts_power_train = ts_power.copy()[:split] if i == self.HORIZON_180 else ts_power.copy()[split-size:split]
             ts_power_test = ts_power.copy()[split:split+h]
 
             # Preprocessing
@@ -355,7 +364,6 @@ class ForecastEngine:
 
             # Storing older time series
             ts_power_old = ts_power.copy()
-            
 
             # Forecasting
             pred = self._forecast(
