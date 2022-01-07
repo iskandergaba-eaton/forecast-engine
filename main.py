@@ -1,3 +1,4 @@
+import numpy as np
 import matplotlib.pyplot as plt
 from pylab import rcParams
 plt.style.use('fivethirtyeight')
@@ -13,14 +14,16 @@ if __name__ == "__main__":
            'usltccnvcenter4', 'usltccnvcenter5', 'simtcsvc01']
     versions = ['20-12-2021']
 
-    root, dc = '../data/clean/{0}'.format(versions[-1]), DCs[3]
+    root, dc = '../data/clean/{0}'.format(versions[-1]), DCs[0]
     figname = '.results/{0}.png'.format(dc)
 
-    horizon_key = ForecastEngine.HORIZON_30
+    horizon_key = ForecastEngine.HORIZON_90
 
     oracle = ForecastEngine(root=root)
-    fcast, fcast_low, fcast_up = oracle.forecast(dc=dc, approach=ForecastEngine.APPROACH_HYBRID,
-                                                 granularity=ForecastEngine.GRANULARITY_SMART, horizon=horizon_key)
+    fcast, fcast_low, fcast_up = oracle.forecast(dc=dc, approach=ForecastEngine.APPROACH_REGULAR,
+                                                 granularity=ForecastEngine.GRANULARITY_DC, horizon=horizon_key)
+    fcast_peaks, _, _ = oracle.forecast(dc=dc, approach=ForecastEngine.APPROACH_REGULAR,
+                                                 granularity=ForecastEngine.GRANULARITY_DC, horizon=horizon_key, agg_func=np.max)
 
     df = load_data(root, dc, freq=fcast.index.freq)
     ts_power = df['power']
@@ -36,6 +39,7 @@ if __name__ == "__main__":
     ts_power_test.plot(ax=ax, label='Observed Future')
 
     fcast.plot(ax=ax, label='Forecast', alpha=0.75, color='teal')
+    fcast_peaks.plot(ax=ax, label='Peaks Forecast', alpha=0.75, color='yellow')
     ax.fill_between(fcast.index, fcast_low, fcast_up, color='k', alpha=.25)
     plt.axvline(x=fcast.index[0], color='brown',
                 label='Present', linestyle='--')

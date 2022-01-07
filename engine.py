@@ -1,9 +1,10 @@
-from datetime import timedelta
 import os
-
 import util
+import numpy as np
 import pandas as pd
 import statsmodels.tsa as sm
+
+from datetime import timedelta
 
 class ForecastEngine:
 
@@ -129,7 +130,7 @@ class ForecastEngine:
 
         return fcast_agg, fcast_agg_low, fcast_agg_up
 
-    def _dc(self, dc, horizon, save_dir='.results'):
+    def _dc(self, dc, horizon, agg_func=np.mean, save_dir='.results'):
         h = self._horizons[horizon]
         f = self._freqs[horizon]
 
@@ -138,7 +139,7 @@ class ForecastEngine:
             os.makedirs(save_dir)
 
         # Loading data
-        df = util.load_data(self.root, dc, freq=f)
+        df = util.load_data(self.root, dc, agg_func=agg_func, freq=f)
 
         # Preprocessing
         ts_power = df['power']
@@ -397,14 +398,14 @@ class ForecastEngine:
         
         return fcast, fcast_low, fcast_up
 
-    def forecast(self, dc, approach, granularity, horizon):
+    def forecast(self, dc, approach, granularity, horizon, agg_func=np.mean):
         if approach == self.APPROACH_REGULAR:
             if granularity == self.GRANULARITY_SERVER:
                 return self._server(dc, horizon)
             elif granularity == self.GRANULARITY_SMART:
                 return self._smart(dc, horizon)
             else:
-                return self._dc(dc, horizon)
+                return self._dc(dc, horizon, agg_func=agg_func)
         else:
             if granularity == self.GRANULARITY_SERVER:
                 return self._server_hybrid(dc, horizon)
