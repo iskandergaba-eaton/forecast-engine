@@ -17,7 +17,7 @@ if __name__ == "__main__":
     root, dc = '../data/clean/{0}'.format(versions[-1]), DCs[3]
     figname = '.results/{0}.png'.format(dc)
 
-    horizon_key = ForecastEngine.HORIZON_90
+    horizon_key = ForecastEngine.HORIZON_30
 
     oracle = ForecastEngine(root=root)
     fcast, fcast_low, fcast_up = oracle.forecast(dc=dc, approach=ForecastEngine.APPROACH_REGULAR,
