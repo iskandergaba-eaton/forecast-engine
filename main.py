@@ -17,7 +17,7 @@ if __name__ == "__main__":
     root, dc = '../data/clean/{0}'.format(versions[-1]), DCs[3]
     figname = '.results/{0}.png'.format(dc)
 
-    horizon_key = ForecastEngine.HORIZON_90
+    horizon_key = ForecastEngine.HORIZON_30
 
     oracle = ForecastEngine(root=root)
     fcast, fcast_low, fcast_up = oracle.forecast(dc=dc, approach=ForecastEngine.APPROACH_REGULAR,
@@ -36,12 +36,12 @@ if __name__ == "__main__":
 
     ax = ts_power_train.plot(label='Observed Past')
 
-    ts_power_test.plot(ax=ax, label='Observed Future')
+    ts_power_test.plot(ax=ax, label='Observed Future', color='teal')
 
-    fcast.plot(ax=ax, label='Forecast', alpha=0.75, color='teal')
-    fcast_peaks.plot(ax=ax, label='Peaks Forecast', alpha=0.75, color='yellow')
-    ax.fill_between(fcast.index, fcast_low, fcast_up, color='k', alpha=.25)
-    plt.axvline(x=fcast.index[0], color='brown',
+    fcast.plot(ax=ax, label='Forecast', alpha=0.75, color='yellow')
+    fcast_peaks.plot(ax=ax, label='Peaks Forecast', alpha=0.75, color='red')
+    ax.fill_between(fcast.index, fcast_low, fcast_up, label='Confidence Interval', color='k', alpha=.25)
+    plt.axvline(x=fcast_peaks.index[0], color='brown',
                 label='Present', linestyle='--')
 
     ax.set_xlabel('Time')
