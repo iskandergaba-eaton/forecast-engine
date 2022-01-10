@@ -35,6 +35,8 @@ def load_file(filename, agg_func=np.mean, freq='H'):
     data = pd.read_csv(filename)
     data.rename({'Unnamed: 0': 'timestamp'}, axis=1, inplace=True)
     data['timestamp'] = pd.to_datetime(data['timestamp'])
+    #data = data.groupby(data['timestamp'].dt.round(
+    #    freq)).agg(agg_func)
 
     # Index the data
     data.set_index('timestamp', inplace=True)
