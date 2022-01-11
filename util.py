@@ -75,11 +75,11 @@ def load_data(root, dc, agg_func=np.mean, freq='H'):
     return load_files(filenames, agg_func, freq)
 
 ## Cluster servers based on their seasonality
-def group_servers(filenames, horizon, freq, load=True):
+def group_servers(filenames, horizon, freq, agg_func=np.mean, load=True):
     groups = {}
     for name in filenames:
         # Load file
-        df = load_file(name, freq)
+        df = load_file(name, agg_func, freq)
 
         # Preprocess
         ts_power = df['power']
@@ -108,7 +108,7 @@ def group_servers(filenames, horizon, freq, load=True):
         # Put in the right group
         for g in groups:
             filenames = groups[g]
-            df = load_files(filenames, freq)
+            df = load_files(filenames, agg_func, freq)
             ts_power = df['power']
             ts_power.index.freq = freq
             if g in data:

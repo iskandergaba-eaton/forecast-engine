@@ -50,7 +50,7 @@ class ForecastEngine:
         pred = result.get_prediction(start=start_future, end=end_future).summary_frame(alpha=alpha)
         return pred
 
-    def _server(self, dc, horizon, save_dir='.results'):
+    def _server(self, dc, horizon, agg_func=np.mean, save_dir='.results'):
         h = self._horizons[horizon]
         f = self._freqs[horizon]
 
@@ -65,7 +65,7 @@ class ForecastEngine:
 
         for name in filenames:
             # Loading data
-            df = util.load_file(name, freq=f)
+            df = util.load_file(name, agg_func=agg_func, freq=f)
 
             # Preprocessing
             ts_power = df['power']
@@ -90,7 +90,7 @@ class ForecastEngine:
 
         return fcast_agg, fcast_agg_low, fcast_agg_up
 
-    def _smart(self, dc, horizon, save_dir='.results'):
+    def _smart(self, dc, horizon, agg_func=np.mean, save_dir='.results'):
         h = self._horizons[horizon]
         f = self._freqs[horizon]
 
@@ -100,7 +100,7 @@ class ForecastEngine:
 
         filenames = util.get_servers(self.root, dc)
 
-        groups = util.group_servers(filenames, h, f)
+        groups = util.group_servers(filenames, h, f, agg_func)
 
         fcast_agg = fcast_agg_low = fcast_agg_up = None
 
@@ -401,9 +401,9 @@ class ForecastEngine:
     def forecast(self, dc, approach, granularity, horizon, agg_func=np.mean):
         if approach == self.APPROACH_REGULAR:
             if granularity == self.GRANULARITY_SERVER:
-                return self._server(dc, horizon)
+                return self._server(dc, horizon, agg_func=agg_func)
             elif granularity == self.GRANULARITY_SMART:
-                return self._smart(dc, horizon)
+                return self._smart(dc, horizon, agg_func=agg_func)
             else:
                 return self._dc(dc, horizon, agg_func=agg_func)
         else:
