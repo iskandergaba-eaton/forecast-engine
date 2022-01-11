@@ -14,7 +14,7 @@ if __name__ == "__main__":
            'usltccnvcenter4', 'usltccnvcenter5', 'simtcsvc01']
     versions = ['20-12-2021', '12-01-2022']
 
-    root, dc = '../data/clean/{0}'.format(versions[-1]), DCs[0]
+    root, dc = '../data/clean/{0}'.format(versions[-1]), DCs[3]
     figname = '.results/{0}.png'.format(dc)
 
     horizon_key = ForecastEngine.HORIZON_30
