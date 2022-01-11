@@ -14,16 +14,16 @@ if __name__ == "__main__":
            'usltccnvcenter4', 'usltccnvcenter5', 'simtcsvc01']
     versions = ['20-12-2021', '12-01-2022']
 
-    root, dc = '../data/clean/{0}'.format(versions[-1]), DCs[3]
+    root, dc = '../data/clean/{0}'.format(versions[-1]), DCs[0]
     figname = '.results/{0}.png'.format(dc)
 
     horizon_key = ForecastEngine.HORIZON_30
 
     oracle = ForecastEngine(root=root)
     fcast, fcast_low, fcast_up = oracle.forecast(dc=dc, approach=ForecastEngine.APPROACH_REGULAR,
-                                                 granularity=ForecastEngine.GRANULARITY_DC, horizon=horizon_key)
+                                                 granularity=ForecastEngine.GRANULARITY_SMART, horizon=horizon_key)
     fcast_peaks, _, _ = oracle.forecast(dc=dc, approach=ForecastEngine.APPROACH_REGULAR,
-                                                 granularity=ForecastEngine.GRANULARITY_DC, horizon=horizon_key, agg_func=np.max)
+                                                 granularity=ForecastEngine.GRANULARITY_SMART, horizon=horizon_key, agg_func=np.max)
 
     df = load_data(root, dc, freq=fcast.index.freq)
     ts_power = df['power']
