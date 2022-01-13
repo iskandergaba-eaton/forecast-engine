@@ -4,7 +4,7 @@ import pandas as pd
 from util import fill_gaps
 
 root_dirty, root_clean = '../data/dirty', '../data/clean'
-versions = ['20-12-2021']
+versions = ['20-12-2021', '12-01-2022']
 min_timestamp, max_timestamp = {}, {}
 
 files_dirty = []
@@ -33,12 +33,15 @@ for filename in files_dirty:
     # Round to nearest minute
     df = df.groupby(df['timestamp'].dt.round('10 min')).mean().reset_index()
 
+    # Ensuring that we only take time series that are long enough into consideration
     min_t, max_t = min(df['timestamp']), max(df['timestamp'])
-
-    #min_timestamp[dc] = min(min_t, min_timestamp[dc]) if dc in min_timestamp else min_t
-    max_timestamp[dc] = max(max_t, max_timestamp[dc]
-                            ) if dc in max_timestamp else max_t
-
+    min_timestamp[dc] = min(min_t, min_timestamp[dc]) if dc in min_timestamp else min_t
+    max_timestamp[dc] = max(max_t, max_timestamp[dc]) if dc in max_timestamp else max_t
+    if dc in min_timestamp:
+        min_timestamp[dc] = max(min_t, min_timestamp[dc]) if str(
+            min_timestamp[dc] - min_t)[0] == '0' else min(min_t, min_timestamp[dc])
+    else:
+        max_timestamp[dc] = max_t
     if dc in max_timestamp:
         max_timestamp[dc] = min(max_t, max_timestamp[dc]) if str(
             max_timestamp[dc] - max_t)[0] == '0' else max(max_t, max_timestamp[dc])
