@@ -41,7 +41,7 @@ for filename in files_dirty:
         min_timestamp[dc] = max(min_t, min_timestamp[dc]) if str(
             min_timestamp[dc] - min_t)[0] == '0' else min(min_t, min_timestamp[dc])
     else:
-        max_timestamp[dc] = max_t
+        min_timestamp[dc] = min_t
     if dc in max_timestamp:
         max_timestamp[dc] = min(max_t, max_timestamp[dc]) if str(
             max_timestamp[dc] - max_t)[0] == '0' else max(max_t, max_timestamp[dc])
@@ -91,7 +91,7 @@ for filename in files_dirty:
 
     # Ignore server if the recording length is not enough
     dc = os.path.split(save_dir)[1]
-    if df.index[-1] < max_timestamp[dc] or (df['power'] == 0).all():
+    if df.index[0] > min_timestamp[dc] or df.index[-1] < max_timestamp[dc] or df['power'].max() == 0:
         print(server, 'skipped.')
         continue
     else:
