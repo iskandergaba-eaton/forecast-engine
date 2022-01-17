@@ -31,18 +31,15 @@ def get_servers(root, dc):
     return filenames
 
 ## Load a time series
-def load_file(filename, freq='H'):
+def load_file(filename, agg_func=np.mean, freq='H'):
     data = pd.read_csv(filename)
     data.rename({'Unnamed: 0': 'timestamp'}, axis=1, inplace=True)
     data['timestamp'] = pd.to_datetime(data['timestamp'])
-    data = data.groupby(data['timestamp'].dt.round(
-        freq)).mean().reset_index()
-
-    data = data.fillna(-1e-10)
 
     # Index the data
     data.set_index('timestamp', inplace=True)
     data.sort_index(inplace=True)
+    data = data.resample(freq).agg(agg_func)
     data.index.freq = freq
 
     # Memory data is not so useful
@@ -51,11 +48,11 @@ def load_file(filename, freq='H'):
     return data
 
 ## Load multiple time series
-def load_files(filenames, freq='H'):
+def load_files(filenames, agg_func=np.mean, freq='H'):
     df = pd.DataFrame()
     for name in filenames:
         # Load data
-        data = load_file(name, freq)
+        data = load_file(name, agg_func, freq)
 
         # Aggregate the values in one dataframe
         if df.empty:
@@ -71,11 +68,11 @@ def load_files(filenames, freq='H'):
     return df
 
 ## Load time series data for a dataceter
-def load_data(root, dc, freq='H'):
+def load_data(root, dc, agg_func=np.mean, freq='H'):
     # Get server filenames
     filenames = get_servers(root, dc)
 
-    return load_files(filenames, freq)
+    return load_files(filenames, agg_func, freq)
 
 ## Cluster servers based on their seasonality
 def group_servers(filenames, horizon, freq, load=True):
