@@ -124,14 +124,15 @@ def group_servers(filenames, horizon, freq, load=True):
 
 # Time series gap handling
 # Handle gaps
-def fill_gaps(ts):
+def ungap(df, col_name):
+    ts = df[col_name]
     ts_periods = ts.copy().interpolate(method='time').round(2).fillna(0)
     periods = get_periods(ts_periods, min_strength=0.6, all=False)
 
     ts_work = ts.copy()
     if len(periods) > 0:
         period = periods[0]
-        gaps = _detect_gaps(ts_work)
+        gaps = _detect_gaps(ts_work, col_name)
         start, end = gaps['start'], gaps['end']
 
         for i in range(len(start)):
@@ -150,7 +151,7 @@ def fill_gaps(ts):
     return ts_work
 
 # Detect gaps
-def _detect_gaps(ts):
+def _detect_gaps(ts, col_name):
     ts_work = ts.copy()
     ts_work[ts_work < 0] = np.nan
 
@@ -160,7 +161,7 @@ def _detect_gaps(ts):
         blocks)['timestamp'].agg(['min', 'max'])
     out.reset_index(inplace=True)
     out.rename({'min': 'start', 'max': 'end'}, axis=1, inplace=True)
-    out.drop('power', axis=1, inplace=True)
+    out.drop(col_name, axis=1, inplace=True)
     return out
 
 # Stationarity tests
