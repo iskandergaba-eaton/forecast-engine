@@ -50,7 +50,7 @@ class ForecastEngine:
         pred = result.get_prediction(start=start_future, end=end_future).summary_frame(alpha=alpha)
         return pred
 
-    def _server(self, dc, horizon, save_dir='.results'):
+    def _server(self, dc, horizon, agg_func=np.mean, save_dir='.results'):
         h = self._horizons[horizon]
         f = self._freqs[horizon]
 
@@ -65,7 +65,7 @@ class ForecastEngine:
 
         for name in filenames:
             # Loading data
-            df = util.load_file(name, freq=f)
+            df = util.load_file(name, agg_func=agg_func, freq=f)
 
             # Preprocessing
             ts_power = df['power']
@@ -90,7 +90,7 @@ class ForecastEngine:
 
         return fcast_agg, fcast_agg_low, fcast_agg_up
 
-    def _smart(self, dc, horizon, save_dir='.results'):
+    def _smart(self, dc, horizon, agg_func=np.mean, save_dir='.results'):
         h = self._horizons[horizon]
         f = self._freqs[horizon]
 
@@ -100,7 +100,7 @@ class ForecastEngine:
 
         filenames = util.get_servers(self.root, dc)
 
-        groups = util.group_servers(filenames, h, f)
+        groups = util.group_servers(filenames, h, f, agg_func)
 
         fcast_agg = fcast_agg_low = fcast_agg_up = None
 
@@ -157,7 +157,7 @@ class ForecastEngine:
         fcast, fcast_low, fcast_up = pred['mean'], pred['mean_ci_lower'], pred['mean_ci_upper']
         return fcast, fcast_low, fcast_up
 
-    def _server_hybrid(self, dc, horizon, save_dir='.results'):
+    def _server_hybrid(self, dc, horizon, agg_func, save_dir='.results'):
         # Create save directory if it does not exist
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -179,7 +179,7 @@ class ForecastEngine:
                 size = self._storage_sizes[i]
 
                 # Loading data
-                df = util.load_file(name, freq=f)
+                df = util.load_file(name, agg_func=agg_func, freq=f)
 
                 # Preprocessing
                 ts_power = df['power']
@@ -244,7 +244,7 @@ class ForecastEngine:
             
         return fcast_acc, fcast_acc_low, fcast_acc_up
 
-    def _smart_hybrid(self, dc, horizon, save_dir='.results'):
+    def _smart_hybrid(self, dc, horizon, agg_func=np.mean, save_dir='.results'):
         # Create save directory if it does not exist
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -255,7 +255,7 @@ class ForecastEngine:
         # Longest horizon to be used for grouping
         h = self._horizons[self.HORIZON_180]
         f = self._freqs[self.HORIZON_180]
-        groups = util.group_servers(filenames, h, f, load=False)
+        groups = util.group_servers(filenames, h, f, agg_func=agg_func, load=False)
 
         ts_power_old, fcast_old, fcast_old_low , fcast_old_up = {}, {}, {}, {}
 
@@ -267,7 +267,7 @@ class ForecastEngine:
             for g in groups:
                 # Loading data
                 filenames = groups[g]
-                df = util.load_files(filenames, f)
+                df = util.load_files(filenames, agg_func, f)
 
                 # Preprocessing
                 ts_power = df['power']
@@ -334,7 +334,7 @@ class ForecastEngine:
 
         return configs[horizon]
 
-    def _dc_hybrid(self, dc, horizon, save_dir='.results'):
+    def _dc_hybrid(self, dc, horizon, agg_func=np.mean, save_dir='.results'):
         # Create save directory if it does not exist
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -347,7 +347,7 @@ class ForecastEngine:
             size = self._storage_sizes[i]
 
             # Loading data
-            df = util.load_data(self.root, dc, freq=f)
+            df = util.load_data(self.root, dc, agg_func, freq=f)
             ts_power = df['power']
             ts_power.index.freq = f
             ts_power = util.fill_gaps(ts_power)
@@ -401,15 +401,15 @@ class ForecastEngine:
     def forecast(self, dc, approach, granularity, horizon, agg_func=np.mean):
         if approach == self.APPROACH_REGULAR:
             if granularity == self.GRANULARITY_SERVER:
-                return self._server(dc, horizon)
+                return self._server(dc, horizon, agg_func=agg_func)
             elif granularity == self.GRANULARITY_SMART:
-                return self._smart(dc, horizon)
+                return self._smart(dc, horizon, agg_func=agg_func)
             else:
                 return self._dc(dc, horizon, agg_func=agg_func)
         else:
             if granularity == self.GRANULARITY_SERVER:
-                return self._server_hybrid(dc, horizon)
+                return self._server_hybrid(dc, horizon, agg_func=agg_func)
             elif granularity == self.GRANULARITY_SMART:
-                return self._smart_hybrid(dc, horizon)
+                return self._smart_hybrid(dc, horizon, agg_func=agg_func)
             else:
-                return self._dc_hybrid(dc, horizon)
+                return self._dc_hybrid(dc, horizon, agg_func=agg_func)
