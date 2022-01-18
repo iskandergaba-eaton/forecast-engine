@@ -162,8 +162,6 @@ def _detect_gaps(ts, col_name):
     return out
 
 # Stationarity tests
-
-
 def is_stationary(ts, sig_level=0.05, trend_stationary=False):
     reg = 'ct' if trend_stationary else 'c'
 
