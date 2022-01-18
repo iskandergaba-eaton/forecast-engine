@@ -4,7 +4,7 @@ import pandas as pd
 
 from util import ungap
 
-def get_time_range(filename, ignore_header=False):        
+def get_time_range(filename):
         first_line = read_first_line(filename, ignore_header=True)
         last_line = read_last_line(filename)
         start_time = pd.to_datetime(first_line.split(',')[0], utc=True).round('10T')
