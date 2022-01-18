@@ -69,16 +69,20 @@ for filename in files_dirty:
     # Load the data
     df = pd.read_csv(filename, error_bad_lines=True)
 
-    # Ignore server if all power values are zeros
-    if (df['power'] == 0).all():
-        print(server, 'skipped.')
-        continue
-
     # Ignore VMs
     if 'Host' in df.columns:
         continue
 
-    print('Cleaning {}...'.format(server))
+    # Ignore server if the data range is not long enough and power consumption has not been recorded
+    dc = os.path.split(save_dir)[1]
+    if df.index[0] > min_timestamp[dc] or df.index[-1] < max_timestamp[dc] or df['power'].max() == 0:
+        print(server, 'skipped.')
+        continue
+    else:
+        df = df[min_timestamp[dc]:max_timestamp[dc]]
+    
+    # Start cleaning
+    print('{} cleaning started...'.format(server))
 
     # Rename columns
     df.rename(columns={'Unnamed: 0': 'timestamp'}, inplace=True),
@@ -101,14 +105,6 @@ for filename in files_dirty:
     df['power'] = ungap(df, 'power')
     df['power_max'] = ungap(df, 'power_max')
 
-    # Ignore server if the recording length is not enough
-    dc = os.path.split(save_dir)[1]
-    if df.index[0] > min_timestamp[dc] or df.index[-1] < max_timestamp[dc] or df['power'].max() == 0:
-        print(server, 'skipped.')
-        continue
-    else:
-        df = df[min_timestamp[dc]:max_timestamp[dc]]
-
     # Save clean data
     df.to_csv(savename)
-    print('Done.')
+    print('{} cleaning done.'.format(server))
