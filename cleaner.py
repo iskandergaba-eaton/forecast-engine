@@ -32,7 +32,7 @@ def read_last_line(filename):
 
 # Global variables
 root_dirty, root_clean = '../data/dirty', '../data/clean'
-versions = ['20-12-2021', '12-01-2022']
+versions = ['20-12-2021', '20-01-2022']
 start_times, end_times = {}, {}
 files_dirty = []
 
@@ -54,9 +54,12 @@ for path, subdirs, files in os.walk(os.path.join(root_dirty, versions[-1])):
             end_times[dc] = {}
         
         # Store time ranges for each server in each datacenter
-        start_t, end_t = get_time_range(filename, ignore_header=True)
+        start_t, end_t = get_time_range(filename)
         start_times[dc][start_t] = 1 if start_t not in start_times[dc] else start_times[dc][start_t] + 1
         end_times[dc][end_t] = 1 if end_t not in end_times[dc] else end_times[dc][end_t] + 1
+
+# Sort the list of files for debug purposes
+files_dirty.sort()
 
 # Find the most dominant time range for each datacenter
 min_timestamp, max_timestamp = {}, {}
@@ -66,15 +69,25 @@ for dc in start_times:
 
 # Start cleaning
 for filename in files_dirty:
+
     # Load the data
-    df = pd.read_csv(filename, error_bad_lines=True)
+    df = pd.read_csv(filename, index_col=0, error_bad_lines=True, parse_dates=True, date_parser=lambda col: pd.to_datetime(col, utc=True))
+    df.index.name = 'timestamp'
 
     # Ignore VMs
     if 'Host' in df.columns:
         continue
 
-    # Ignore server if the data range is not long enough and power consumption has not been recorded
+    # Round the index to the nearest 10 minutes
+    freq = '10T'
+    df.index = df.index.round(freq)
+
+    # Preparing save paths
+    savename = filename.replace(root_dirty, root_clean)
+    save_dir, server = os.path.split(savename)
     dc = os.path.split(save_dir)[1]
+
+    # Ignore server if the data range is not long enough and power consumption has not been recorded
     if df.index[0] > min_timestamp[dc] or df.index[-1] < max_timestamp[dc] or df['power'].max() == 0:
         print(server, 'skipped.')
         continue
@@ -85,17 +98,10 @@ for filename in files_dirty:
     print('{} cleaning started...'.format(server))
 
     # Rename columns
-    df.rename(columns={'Unnamed: 0': 'timestamp'}, inplace=True),
     if 'cpux100' in df.columns:
         df['cpux100'] /= 100
 
-    # Convert `timestamp` to a datetime object
-    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
-
-    # Set the index and round to nearest minute
-    freq = '10T'
-    df.set_index('timestamp', inplace=True)
-    df.index = df.index.round(freq)
+    # Resample data
     ts_power = df['power'].copy()
     df = df.resample(freq).agg(np.mean).round(2)
     df['power_max'] = ts_power.resample(freq).agg(np.max).round(2)
