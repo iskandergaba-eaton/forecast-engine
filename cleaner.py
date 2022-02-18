@@ -4,6 +4,12 @@ import pandas as pd
 
 from util import ungap
 
+def get_colnames(filename, delimiter=",", empty_replacement=""):
+    header = read_first_line(filename, ignore_header=False).replace("\n", "")
+    colnames = header.split(delimiter)
+    colnames = [empty_replacement if col == '' else col for col in colnames ]
+    return colnames
+
 def get_time_range(filename):
         first_line = read_first_line(filename, ignore_header=True)
         last_line = read_last_line(filename)
@@ -70,9 +76,13 @@ for dc in start_times:
 # Start cleaning
 for filename in files_dirty:
 
+    # get column names list
+    colnames = get_colnames(filename, empty_replacement="timestamp")
+
     # Load the data
-    df = pd.read_csv(filename, index_col=0, error_bad_lines=True, parse_dates=True, date_parser=lambda col: pd.to_datetime(col, utc=True))
-    df.index.name = 'timestamp'
+    df = pd.read_csv(filename, index_col=0, header=0, names=colnames,
+    usecols=["timestamp", "power"], parse_dates=True,
+    date_parser=lambda col: pd.to_datetime(col, utc=True))
 
     # Ignore VMs
     if 'Host' in df.columns:
