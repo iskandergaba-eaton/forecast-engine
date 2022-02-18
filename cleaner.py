@@ -7,7 +7,7 @@ from util import ungap
 def get_colnames(filename, delimiter=",", empty_replacement=""):
     header = read_first_line(filename, ignore_header=False).replace("\n", "")
     colnames = header.split(delimiter)
-    colnames = [empty_replacement if col == '' else col for col in colnames ]
+    colnames = [empty_replacement if col == '' else col for col in colnames]
     return colnames
 
 def get_time_range(filename):
