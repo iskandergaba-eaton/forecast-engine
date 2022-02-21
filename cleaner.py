@@ -79,14 +79,14 @@ for filename in files_dirty:
     # get column names list
     colnames = get_colnames(filename, empty_replacement="timestamp")
 
+    # Ignore VMs
+    if 'Host' in colnames:
+        continue
+
     # Load the data
     df = pd.read_csv(filename, index_col=0, header=0, names=colnames,
     usecols=["timestamp", "power"], parse_dates=True,
     date_parser=lambda col: pd.to_datetime(col, utc=True))
-
-    # Ignore VMs
-    if 'Host' in df.columns:
-        continue
 
     # Round the index to the nearest 10 minutes
     freq = '10T'
