@@ -11,7 +11,7 @@ from util import load_data
 if __name__ == "__main__":
        DCs = ['usltcsvcenter2', 'usltcsvcenter3',
            'usltccnvcenter4', 'usltccnvcenter5', 'simtcsvc01']
-       versions = ['20-12-2021', '12-01-2022']
+       versions = ['20-12-2021', '12-01-2022', '19-02-2022']
 
        root, dc = '../data/clean/{}'.format(versions[-1]), DCs[0]
 

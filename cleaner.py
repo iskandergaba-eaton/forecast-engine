@@ -38,7 +38,7 @@ def read_last_line(filename):
 
 # Global variables
 root_dirty, root_clean = '../data/dirty', '../data/clean'
-versions = ['20-12-2021', '20-01-2022']
+versions = ['20-12-2021', '12-01-2022', '19-02-2022']
 start_times, end_times = {}, {}
 files_dirty = []
 
