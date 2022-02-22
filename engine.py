@@ -350,7 +350,6 @@ class ForecastEngine:
             df = util.load_data(self.root, dc, agg_func, freq=f)
             ts_power = df[series]
             ts_power.index.freq = f
-            ts_power = util.fill_gaps(ts_power)
 
             # Train-test split
             split = ts_power.index[-1] - self._test_sizes[i]
