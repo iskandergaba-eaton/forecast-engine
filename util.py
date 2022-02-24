@@ -41,10 +41,6 @@ def load_file(filename, agg_func=np.mean, freq='H'):
     data.index = data.index.round(freq)
     data = data.resample(freq).agg(agg_func)
     data.index.freq = freq
-
-    # Memory data is not so useful
-    data.drop(['memory'], axis=1, inplace=True)
-
     return data
 
 ## Load multiple time series
