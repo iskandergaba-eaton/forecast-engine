@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 
 from util import ungap
+from sklearn.preprocessing import MultiLabelBinarizer
 
 def get_colnames(filename, delimiter=",", empty_replacement=""):
     header = read_first_line(filename, ignore_header=False).replace("\n", "")
@@ -10,11 +11,11 @@ def get_colnames(filename, delimiter=",", empty_replacement=""):
     colnames = [empty_replacement if col == '' else col for col in colnames]
     return colnames
 
-def get_time_range(filename):
+def get_time_range(filename, round='10T'):
         first_line = read_first_line(filename, ignore_header=True)
         last_line = read_last_line(filename)
-        start_time = pd.to_datetime(first_line.split(',')[0], utc=True).round('10T')
-        end_time = pd.to_datetime(last_line.split(',')[0], utc=True).round('10T')
+        start_time = pd.to_datetime(first_line.split(',')[0], utc=True).round(round)
+        end_time = pd.to_datetime(last_line.split(',')[0], utc=True).round(round)
         return start_time, end_time
 
 def read_first_line(filename, ignore_header):
@@ -36,9 +37,32 @@ def read_last_line(filename):
             f.seek(0)
         return f.readline().decode()
 
+def build_dc_state(on, off):
+    current = []
+    start_stop = {}
+    for i in on.keys():
+        start_list = on[i]
+        current = current + start_list
+        start_stop[i] = current
+        for j in off.keys():
+            if j < i:
+                stop_list = off[j]
+                current = [t for t in current if t not in stop_list]
+                start_stop[j] = current
+                off.pop(j, None)
+            else:
+                break
+    mlb = MultiLabelBinarizer()
+    servers_state = pd.DataFrame(mlb.fit_transform(start_stop.values()),
+                   columns=mlb.classes_,
+                   index=start_stop.keys()).sort_index()
+    servers_state.index.name = 'timestamp'
+    return servers_state
+
 # Global variables
 root_dirty, root_clean = '../data/dirty', '../data/clean'
 versions = ['20-12-2021', '12-01-2022', '19-02-2022']
+server_on, server_off = {}, {}
 start_times, end_times = {}, {}
 files_dirty = []
 
@@ -64,6 +88,15 @@ for path, subdirs, files in os.walk(os.path.join(root_dirty, versions[-1])):
         start_times[dc][start_t] = 1 if start_t not in start_times[dc] else start_times[dc][start_t] + 1
         end_times[dc][end_t] = 1 if end_t not in end_times[dc] else end_times[dc][end_t] + 1
 
+        if dc not in server_on:
+            server_on[dc] = {}
+            server_off[dc] = {}
+
+        # Store timestamps where servers start or stop
+        server_on[dc][start_t] = [server] if start_t not in server_on[dc] else server_on[dc][start_t] + [server]
+        server_off[dc][end_t] = [server] if end_t not in server_off[dc] else server_off[dc][end_t] + [server]
+
+
 # Sort the list of files for debug purposes
 files_dirty.sort()
 
@@ -72,6 +105,12 @@ min_timestamp, max_timestamp = {}, {}
 for dc in start_times:
     min_timestamp[dc] = max(start_times[dc], key=start_times[dc].get)
     max_timestamp[dc] = max(end_times[dc], key=end_times[dc].get)
+
+# Build a dataframe for server states for every datacenter
+for dc in server_on:
+    savename = os.path.join(root_clean, versions[-1], '{}.csv'.format(dc))
+    df = build_dc_state(server_on[dc], server_off[dc])
+    df.to_csv(savename)
 
 # Start cleaning
 for filename in files_dirty:
