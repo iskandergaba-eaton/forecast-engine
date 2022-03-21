@@ -61,7 +61,7 @@ def build_dc_state(on, off):
 
 # Global variables
 root_dirty, root_clean = '../data/dirty', '../data/clean'
-versions = ['20-12-2021', '12-01-2022', '19-02-2022']
+versions = ['20-12-2021', '12-01-2022', '19-02-2022', '16-03-2022']
 server_on, server_off = {}, {}
 start_times, end_times = {}, {}
 files_dirty = []
@@ -152,13 +152,13 @@ for filename in files_dirty:
 
     # Resample data
     ts_power = df['power'].copy()
-    df = df.resample(freq).agg(np.mean).round(2)
-    df['power_max'] = ts_power.resample(freq).agg(np.max).round(2)
+    df = df.resample(freq).agg(np.mean)
+    df['power_max'] = ts_power.resample(freq).agg(np.max)
     df.index.freq = freq
 
     # Fill gaps via interpolation
-    df['power'] = ungap(df, 'power')
-    df['power_max'] = ungap(df, 'power_max')
+    df['power'] = ungap(df, 'power').round(2)
+    df['power_max'] = ungap(df, 'power_max').round(2)
 
     # Save clean data
     df.to_csv(savename)

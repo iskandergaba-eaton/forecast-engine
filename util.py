@@ -119,18 +119,16 @@ def group_servers(filenames, series, horizon, freq, agg_func=np.mean, load=True)
 # Handle gaps
 def ungap(df, col_name):
     ts = df[col_name]
+    ts_work = ts.copy()
     ts_periods = ts.copy().interpolate(method='time').round(2).fillna(0)
     periods = get_periods(ts_periods, min_strength=0.6, all=False)
-
-    ts_work = ts.copy()
+    gaps = _detect_gaps(ts_work, col_name)
+    gaps_start, gaps_end = gaps['start'], gaps['end']
     if len(periods) > 0:
         period = periods[0]
-        gaps = _detect_gaps(ts_work, col_name)
-        start, end = gaps['start'], gaps['end']
-
-        for i in range(len(start)):
-            s = ts_work.index.get_loc(start[i])
-            e = ts_work.index.get_loc(end[i]) + 1
+        for i in range(len(gaps_start)):
+            s = ts_work.index.get_loc(gaps_start[i])
+            e = ts_work.index.get_loc(gaps_end[i]) + 1
             length = e - s
             times = math.ceil(length / period)
             if s > period:
@@ -141,6 +139,7 @@ def ungap(df, col_name):
                     s += l
                     length -= l
     ts_work = ts_work.interpolate(method='time').round(2)
+    ts_work = _add_noise(ts_work, gaps)
     return ts_work
 
 # Detect gaps
@@ -156,6 +155,21 @@ def _detect_gaps(ts, col_name):
     out.rename({'min': 'start', 'max': 'end'}, axis=1, inplace=True)
     out.drop(col_name, axis=1, inplace=True)
     return out
+
+# Add artificial noise
+def _add_noise(ts, gaps):
+    ts_work = ts.copy()
+    gaps_start = list(gaps['start'])
+    gaps_end = list(gaps['end'])
+    for i in range(len(gaps_start)):
+        gap = ts_work[gaps_start[i] : gaps_end[i]]
+        # If regsnr small, noise is too big
+        regsnr = max(40, np.log(np.mean(gap)))
+        signal_power = sum([math.pow(abs(gap[i]), 2) for i in range(len(gap))]) / len(gap)
+        noise_power = signal_power / (math.pow(10, regsnr / 10))
+        noise = math.sqrt(noise_power) * (np.random.uniform(-1, 1, size=len(gap)))
+        ts_work[gaps_start[i] : gaps_end[i]] = noise +  ts_work[gaps_start[i] : gaps_end[i]] 
+    return ts_work
 
 # Stationarity tests
 def is_stationary(ts, sig_level=0.05, trend_stationary=False):
