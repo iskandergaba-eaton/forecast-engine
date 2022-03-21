@@ -59,12 +59,20 @@ def build_dc_state(on, off):
     servers_state.index.name = 'timestamp'
     return servers_state
 
-# Global variables
+# Ungapping strategies
+STRAT_UNGAP = 0
+STRAT_INTERPOLATE = 1
+STRAT_GAPS = 2
+
+# Initial variables
 root_dirty, root_clean = '../data/dirty', '../data/clean'
 versions = ['20-12-2021', '12-01-2022', '19-02-2022', '16-03-2022']
 server_on, server_off = {}, {}
 start_times, end_times = {}, {}
 files_dirty = []
+
+# Choose ungapping strategy
+strategy = STRAT_UNGAP
 
 # Pre-processing
 for path, subdirs, files in os.walk(os.path.join(root_dirty, versions[-1])):
@@ -156,9 +164,13 @@ for filename in files_dirty:
     df['power_max'] = ts_power.resample(freq).agg(np.max)
     df.index.freq = freq
 
-    # Fill gaps via interpolation
-    df['power'] = ungap(df, 'power').round(2)
-    df['power_max'] = ungap(df, 'power_max').round(2)
+    # Apply the chosen ungapping strategy
+    if strategy == STRAT_UNGAP:
+        df['power'] = ungap(df, 'power').round(2)
+        df['power_max'] = ungap(df, 'power_max').round(2)
+    elif strategy == STRAT_INTERPOLATE:
+        df['power'] = df['power'].interpolate(method='time').round(2)
+        df['power_max'] = df['power_max'].interpolate(method='time').round(2)
 
     # Save clean data
     df.to_csv(savename)
