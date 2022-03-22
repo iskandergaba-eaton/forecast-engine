@@ -9,6 +9,7 @@ patch_sklearn()
 # Mertrics
 from sklearn.metrics import r2_score, median_absolute_error, mean_absolute_error
 from sklearn.metrics import mean_squared_error
+from scipy.signal import find_peaks, find_peaks_cwt, peak_prominences
 
 # Core libraries
 import numpy as np
@@ -115,8 +116,166 @@ def group_servers(filenames, series, horizon, freq, agg_func=np.mean, load=True)
         return data
     return groups
 
+# Peak detection
+## Detect peaks
+def detect_peaks(ts, lag, threshold, influence, k, h):
+    peaks = {}
+    peaks_zscore = zscore(ts, lag, threshold, influence)['signals']
+    peaks_zcrossing = zero_crossing(ts,k, h, measure ='S1')
+    peaks_scipy = find_peaks_scipy(ts)
+    peaks_scipy_wct = find_peaks_wct(ts)
+    # common points detected by different methods
+    com1 = list(set(peaks_zscore.keys()).intersection(list(peaks_zcrossing.keys())))
+    #com2 = set(peaks_scipy_wct.keys()).intersection(list(peaks_scipy.keys()))
+    #common = list(set(com1).intersection(list(com2)))
+    # keep those with highest SNR (90%)
+    for t in com1 : 
+        peaks[t] = peaks_zscore[t]
+    # keeps only 80% of peaks with highet SNR
+    snr = SNR(ts, peaks, w_size = 20)
+    snr = {k:v for k, v in sorted(snr.items(), key=lambda item: item[1], reverse =True)}
+    p_snr = 8*len(snr)//10
+    key_snr_per = list(snr.keys())[0:p_snr]
+    peaks_snr = {}
+    for t in key_snr_per :
+        peaks_snr[t] = peaks[t]
+    return peaks_snr
+
+## Scipy predefined function wrappers
+def find_peaks_scipy(ts): 
+    peaks  = {}
+    t_peaks, _  = find_peaks(ts, distance=50)
+    for t in  ts.index[t_peaks]:
+        peaks[t] = ts[t]
+    return peaks
+
+def find_peaks_wct(ts): 
+    peaks  = {}
+    t_peaks = find_peaks_cwt(ts, widths= np.arange(1,20),noise_perc = 50)
+    for t in ts.index[t_peaks]:
+        peaks[t] = ts[t]
+    return peaks
+
+# Peak strength metrics
+## Calculate local SNR for each peak in the time series
+def SNR(ts, peaks, w_size):
+    n_ts = len(ts)
+    SNRs = {}
+    for peak in peaks.keys() : 
+        id_peak = list(ts.index).index(peak)
+        # Sliding window around each peak
+        portion = ts.index[max(id_peak - w_size//2, 0) : min(id_peak + w_size//2, n_ts)]
+        SNRs[peak] = _signal_to_noise(ts[portion], axis=0,ddof=0)
+    return SNRs
+
+## Calculate SNR 
+def _signal_to_noise(ts, axis=0, ddof = 0) :
+     ts = np.asanyarray(ts)
+     m = ts.mean(axis)
+     sd = ts.std(axis=axis, ddof=ddof)
+     return np.where(sd == 0, 0, m/sd)
+
+# Zero-crossing: Variance of z-score function, where peak is calculated from some defined functions S1,S2...
+def zero_crossing(ts, k, h, measure):  # 1<=h<=3 // measure ='S1' or 'S2'
+    ts_n = len(ts)
+    peaks = {}
+    a = np.array(ts)
+    m_prime, std_prime= np.array(ts), np.array(ts)
+    for i in range(k, ts_n):
+        if measure == 'S1': 
+            a[i]= _S1(ts, k, i)
+        else : 
+            a[i] = _S2(ts, k, i)
+    for i in range(k, ts_n):
+        m_prime[i], std_prime[i] = np.mean(a[i-k+1: i+1]), np.std(a[i-k + 1: i+1])
+    for i in range(k, ts_n):
+        if a[i] > 0 and (a[i] - m_prime[i]) > h*std_prime[i]:
+            peaks[i] = ts[i]
+    # Keep only one point on the same lag-window of size k 
+    pop_keys = []
+    for i in peaks.keys(): 
+        for j in peaks.keys(): 
+            if abs(i-j) <= k and i!=j : 
+                m = min(peaks[i], peaks[j])
+                if peaks[i] == m:
+                   pop_keys.append(i)
+                else:
+                   pop_keys.append(j)
+    for k in set(pop_keys): 
+        peaks.pop(k)
+    peaks ={ts.index[k] : ts[k] for k in peaks.keys()}
+    return peaks
+
+## Zero-crossing algorithm
+## You can use either S1 or S2 on the zero-crossing algorithm
+def _S1(ts, k, i):
+    max_before, max_after = ts[i] - np.min(ts[i-k-1: i]), ts[i] - np.min(ts[i+1: i+k+1])
+    return (max_before + max_after)/2
+
+def _S2(ts, k, i):
+    mean_before, mean_after = ts[i] - np.mean(ts[i-k-1: i]),ts[i] - np.mean(ts[i+1: i+k+1])
+    return (mean_before + mean_after)/2
+
+## Z-score
+def zscore(ts, lag, threshold, influence):
+    """
+       Calculate z-score for each point (after the lag), based on the means and std of its 'lag' past values.
+       threshold : number of standard deviations from which we consider the point as a peak.
+       Influence parameter : to decide how much past values can affect detection of future peaks.
+    """
+    signals = {}
+    filteredY = np.array(ts)
+    avgFilter = [0]*len(ts)
+    stdFilter = [0]*len(ts)
+    avgFilter[0:lag] = [np.mean(ts[0:lag]) for _ in range(lag)]
+    stdFilter[0:lag] = [np.std(ts[0:lag]) for _ in range(lag)]
+    for i in range(lag, len(ts)):
+        if abs(ts[i] - avgFilter[i-1]) > threshold * stdFilter[i-1]:  # if it's a peak
+            if ts[i] > avgFilter[i-1] :
+                signals[ts.index[i]] = ts[i] # up peak
+            # 'influence' control past values influence on next peaks 
+            filteredY[i] = influence * ts[i] + (1 - influence) * filteredY[i-1]
+        else:
+            filteredY[i] = ts[i]
+        # Average moving (filter the tiem series)
+        avgFilter[i] = np.mean(filteredY[(i-lag+1):i+1])
+        # Std moving 
+        stdFilter[i] = np.std(filteredY[(i-lag+1):i+1])
+    # Create time series for output
+    avgFilter = pd.Series(avgFilter, index=ts.index)
+    stdFilter = pd.Series(stdFilter, index=ts.index)
+    return dict(signals=signals, avgFilter=avgFilter, stdFilter=stdFilter)
+
+## Calculate the prominence of each peak in a signal
+def prominence(ts, peaks):
+    id_peaks = []
+    for peak in peaks.keys() :
+        id_peaks.append(list(ts.index).index(peak))
+    prominence = peak_prominences(ts, id_peaks)[0]
+    proms = {}
+    peaks_t = list(peaks.keys())
+    for i in range(len(peaks_t)) : 
+        proms[peaks_t[i]] = prominence[i]
+    return proms
+
+## LSTM method
+### Prepare data: split time series to fit input of the vanilla_LSTM model
+def split_sequence(sequence, n_steps):
+	X, y = list(), list()
+	for i in range(len(sequence)):
+		# find the end of this pattern
+		end_ix = i + n_steps
+		# check if we are beyond the sequence
+		if end_ix > len(sequence)-1:
+			break
+		# gather input and output parts of the pattern
+		seq_x, seq_y = sequence[i:end_ix], sequence[end_ix]
+		X.append(seq_x)
+		y.append(seq_y)
+	return np.array(X), np.array(y)
+
 # Time series gap handling
-# Handle gaps
+## Handle gaps
 def ungap(df, col_name):
     ts = df[col_name]
     ts_work = ts.copy()
@@ -139,10 +298,25 @@ def ungap(df, col_name):
                     s += l
                     length -= l
     ts_work = ts_work.interpolate(method='time')
-    ts_work = _add_noise(ts_work, gaps)
+    ts_work = add_noise(ts_work, gaps)
     return ts_work.round(2)
 
-# Detect gaps
+## Add artificial noise
+def add_noise(ts, gaps):
+    ts_work = ts.copy()
+    gaps_start = list(gaps['start'])
+    gaps_end = list(gaps['end'])
+    for i in range(len(gaps_start)):
+        gap = ts_work[gaps_start[i] : gaps_end[i]]
+        # If regsnr small, noise is too big
+        regsnr = max(40, np.log(np.mean(gap)))
+        signal_power = sum([math.pow(abs(gap[i]), 2) for i in range(len(gap))]) / len(gap)
+        noise_power = signal_power / (math.pow(10, regsnr / 10))
+        noise = math.sqrt(noise_power) * (np.random.uniform(-1, 1, size=len(gap)))
+        ts_work[gaps_start[i] : gaps_end[i]] = noise +  ts_work[gaps_start[i] : gaps_end[i]] 
+    return ts_work
+
+## Detect gaps
 def _detect_gaps(ts, col_name):
     ts_work = ts.copy()
     ts_work[ts_work < 0] = np.nan
@@ -156,20 +330,19 @@ def _detect_gaps(ts, col_name):
     out.drop(col_name, axis=1, inplace=True)
     return out
 
-# Add artificial noise
-def _add_noise(ts, gaps):
-    ts_work = ts.copy()
-    gaps_start = list(gaps['start'])
-    gaps_end = list(gaps['end'])
-    for i in range(len(gaps_start)):
-        gap = ts_work[gaps_start[i] : gaps_end[i]]
-        # If regsnr small, noise is too big
-        regsnr = max(40, np.log(np.mean(gap)))
-        signal_power = sum([math.pow(abs(gap[i]), 2) for i in range(len(gap))]) / len(gap)
-        noise_power = signal_power / (math.pow(10, regsnr / 10))
-        noise = math.sqrt(noise_power) * (np.random.uniform(-1, 1, size=len(gap)))
-        ts_work[gaps_start[i] : gaps_end[i]] = noise +  ts_work[gaps_start[i] : gaps_end[i]] 
-    return ts_work
+## Differencing method for time series 
+def difference(ts):
+    initial = ts[0]
+    diff = ts.diff()[1:]
+    # Keep initial for reconstruction purposes 
+    return initial, diff
+
+### Reconstruct time series from differenced one 
+def inv_difference(initial, ts):
+    ts_back = list(initial) + list(ts)
+    for i in range(1, len(ts)): 
+        ts_back[i] += ts_back[i-1] 
+    return ts_back 
 
 # Stationarity tests
 def is_stationary(ts, sig_level=0.05, trend_stationary=False):
