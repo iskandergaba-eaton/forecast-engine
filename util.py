@@ -138,9 +138,9 @@ def ungap(df, col_name):
                                                           period: s - period + l].values
                     s += l
                     length -= l
-    ts_work = ts_work.interpolate(method='time').round(2)
+    ts_work = ts_work.interpolate(method='time')
     ts_work = _add_noise(ts_work, gaps)
-    return ts_work
+    return ts_work.round(2)
 
 # Detect gaps
 def _detect_gaps(ts, col_name):

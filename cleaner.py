@@ -166,8 +166,8 @@ for filename in files_dirty:
 
     # Apply the chosen ungapping strategy
     if strategy == STRAT_UNGAP:
-        df['power'] = ungap(df, 'power').round(2)
-        df['power_max'] = ungap(df, 'power_max').round(2)
+        df['power'] = ungap(df, 'power')
+        df['power_max'] = ungap(df, 'power_max')
     elif strategy == STRAT_INTERPOLATE:
         df['power'] = df['power'].interpolate(method='time').round(2)
         df['power_max'] = df['power_max'].interpolate(method='time').round(2)
