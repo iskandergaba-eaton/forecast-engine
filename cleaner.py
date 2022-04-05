@@ -66,7 +66,7 @@ STRAT_GAPS = 2
 
 # Initial variables
 root_dirty, root_clean = '../data/dirty', '../data/clean'
-versions = ['20-12-2021', '12-01-2022', '19-02-2022', '16-03-2022']
+versions = ['20-12-2021', '12-01-2022', '19-02-2022', '01-04-2022']
 server_on, server_off = {}, {}
 start_times, end_times = {}, {}
 files_dirty = []
@@ -132,7 +132,7 @@ for filename in files_dirty:
 
     # Load the data
     df = pd.read_csv(filename, index_col=0, header=0, names=colnames,
-    usecols=["timestamp", "power"], parse_dates=True,
+    usecols=["timestamp", "cpu", "power"], parse_dates=True,
     date_parser=lambda col: pd.to_datetime(col, utc=True))
 
     # Round the index to the nearest 10 minutes
@@ -166,9 +166,11 @@ for filename in files_dirty:
 
     # Apply the chosen ungapping strategy
     if strategy == STRAT_UNGAP:
+        df['cpu'] = ungap(df, 'cpu')
         df['power'] = ungap(df, 'power')
         df['power_max'] = ungap(df, 'power_max')
     elif strategy == STRAT_INTERPOLATE:
+        df['cpu'] = df['cpu'].interpolate(method='time').round(2)
         df['power'] = df['power'].interpolate(method='time').round(2)
         df['power_max'] = df['power_max'].interpolate(method='time').round(2)
 
