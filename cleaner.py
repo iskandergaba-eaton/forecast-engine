@@ -153,20 +153,17 @@ for filename in files_dirty:
     v_prev_idx = np.NaN if v_idx == 0 else v_idx - 1
     filename_prev = None
     if v_prev_idx != np.NaN:
-        filename_prev = filename.replace(versions[v_idx], versions[v_prev_idx]).replace(root_dirty, root_clean)
-        #filename_prev = filename_prev.replace(root_dirty, root_clean)
-    incremental_update = strat_clean == CLEAN_INCREMENT and os.path.exists(filename_prev)
+        filename_prev = filename.replace(
+            versions[v_idx], versions[v_prev_idx]).replace(
+                root_dirty, root_clean)
+    incremental_update = strat_clean == CLEAN_INCREMENT and os.path.exists(
+        filename_prev)
 
     # Load the data
-    df, df_prev = None, None
-    if incremental_update:
-        df = pd.read_csv(filename, index_col=0, header=0, parse_dates=True,
-                         date_parser=lambda col: pd.to_datetime(col, utc=True))
-        df_prev = pd.read_csv(filename_prev, index_col=0, header=0, parse_dates=True,
-                         date_parser=lambda col: pd.to_datetime(col, utc=True))
-    else:
-        df = pd.read_csv(filename, index_col=0, header=0, names=colnames, usecols=[
-                         "timestamp", "cpu", "power"], parse_dates=True, date_parser=lambda col: pd.to_datetime(col, utc=True))
+    df = pd.read_csv(filename, index_col=0, header=0, names=colnames, usecols=[
+                     "timestamp", "cpu", "power"], parse_dates=True, date_parser=lambda col: pd.to_datetime(col, utc=True))
+    df_prev = pd.read_csv(filename_prev, index_col=0, header=0, parse_dates=True,
+                          date_parser=lambda col: pd.to_datetime(col, utc=True)) if incremental_update else None
 
     # Round the index to the nearest 10 minutes
     freq = '10T'
@@ -176,14 +173,13 @@ for filename in files_dirty:
     savename = filename.replace(root_dirty, root_clean)
     save_dir, server = os.path.split(savename)
     dc = os.path.split(save_dir)[1]
-
     # Ignore server if the data range is not long enough and power consumption has not been recorded
     if df.index[0] > min_timestamp[dc] or df.index[-1] < max_timestamp[dc] or df['power'].max() == 0:
         print(server, 'skipped.')
         continue
     else:
         df = df[min_timestamp[dc]:max_timestamp[dc]]
-    
+
     # If CLEAN_INCREMENT is chosen and a previous version of the file exists, clean the new values only
     if incremental_update:
         df = df[df_prev.index[-1]:]
