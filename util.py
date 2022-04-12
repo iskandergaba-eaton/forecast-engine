@@ -276,7 +276,7 @@ def split_sequence(sequence, n_steps):
 
 # Time series gap handling
 ## Handle gaps
-def ungap(df, col_name):
+def ungap(df, col_name, weight):
     ts = df[col_name]
     ts_work = ts.copy()
     ts_periods = ts.copy().interpolate(method='time').round(2).fillna(0)
@@ -298,22 +298,18 @@ def ungap(df, col_name):
                     s += l
                     length -= l
     ts_work = ts_work.interpolate(method='time')
-    ts_work = add_noise(ts_work, gaps)
+    ts_work = add_noise(ts_work, gaps, weight)
     return ts_work.round(2)
 
 ## Add artificial noise
-def add_noise(ts, gaps):
+def add_noise(ts, gaps, weight):
     ts_work = ts.copy()
     gaps_start = list(gaps['start'])
     gaps_end = list(gaps['end'])
     for i in range(len(gaps_start)):
         gap = ts_work[gaps_start[i] : gaps_end[i]]
-        # If regsnr small, noise is too big
-        regsnr = max(40, np.log(np.mean(gap)))
-        signal_power = sum([math.pow(abs(gap[i]), 2) for i in range(len(gap))]) / len(gap)
-        noise_power = signal_power / (math.pow(10, regsnr / 10))
-        noise = math.sqrt(noise_power) * (np.random.uniform(-1, 1, size=len(gap)))
-        ts_work[gaps_start[i] : gaps_end[i]] = noise +  ts_work[gaps_start[i] : gaps_end[i]] 
+        norm = np.random.normal(np.mean(gap), np.std(gap), size = len(gap))
+        ts_work[gaps_start[i] : gaps_end[i]] = weight * norm + (1 - weight) * gap
     return ts_work
 
 ## Detect gaps

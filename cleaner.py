@@ -198,9 +198,9 @@ for filename in files_dirty:
 
     # Apply the chosen ungapping strategy
     if strat_ungap == STRAT_UNGAP:
-        df['cpu'] = ungap(df, 'cpu')
-        df['power'] = ungap(df, 'power')
-        df['power_max'] = ungap(df, 'power_max')
+        df['cpu'] = ungap(df, 'cpu', 0.5)
+        df['power'] = ungap(df, 'power', 0.5)
+        df['power_max'] = ungap(df, 'power_max', 0.5)
     elif strat_ungap == STRAT_INTERPOLATE:
         df['cpu'] = df['cpu'].interpolate(method='time').round(2)
         df['power'] = df['power'].interpolate(method='time').round(2)
