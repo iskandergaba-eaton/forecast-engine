@@ -77,7 +77,7 @@ CLEAN_INCREMENT = 1
 
 # Initial variables
 root_dirty, root_clean = '../data/dirty', '../data/clean'
-versions = ['20-12-2021', '12-01-2022', '19-02-2022', '01-04-2022']
+versions = ['20-12-2021', '12-01-2022', '19-02-2022', '01-04-2022', '07-04-2022']
 server_on, server_off = {}, {}
 start_times, end_times = {}, {}
 files_dirty = []
@@ -89,7 +89,7 @@ v_idx = -1
 strat_ungap = STRAT_UNGAP
 
 # Choose cleaning
-strat_clean = CLEAN_INCREMENT
+strat_clean = CLEAN_FULL
 
 # Pre-processing
 for path, subdirs, files in os.walk(os.path.join(root_dirty, versions[v_idx])):
@@ -156,8 +156,7 @@ for filename in files_dirty:
         filename_prev = filename.replace(
             versions[v_idx], versions[v_prev_idx]).replace(
                 root_dirty, root_clean)
-    incremental_update = strat_clean == CLEAN_INCREMENT and os.path.exists(
-        filename_prev)
+    incremental_update = strat_clean == CLEAN_INCREMENT and os.path.exists(filename_prev)
 
     # Load the data
     df = pd.read_csv(filename, index_col=0, header=0, names=colnames, usecols=[
