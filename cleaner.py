@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from util import ungap
+from util import ungap_knn, ungap_periodic, ungap_mice
 from sklearn.preprocessing import MultiLabelBinarizer
 
 
@@ -67,9 +67,11 @@ def build_dc_state(on, off):
 
 
 # Ungapping strategies
-STRAT_UNGAP = 0
-STRAT_INTERPOLATE = 1
-STRAT_GAPS = 2
+STRAT_UNGAP_KNN = 0
+STRAT_UNGAP_MICE = 1
+STRAT_UNGAP_PERIODIC = 2
+STRAT_INTERPOLATE = 3
+STRAT_GAPS = 4
 
 # Cleaning strategies
 CLEAN_FULL = 0
@@ -86,7 +88,7 @@ files_dirty = []
 v_idx = -1
 
 # Choose ungapping strategy
-strat_ungap = STRAT_UNGAP
+strat_ungap = STRAT_UNGAP_KNN
 
 # Choose cleaning
 strat_clean = CLEAN_FULL
@@ -197,10 +199,18 @@ for filename in files_dirty:
     df.index.freq = freq
 
     # Apply the chosen ungapping strategy
-    if strat_ungap == STRAT_UNGAP:
-        df['cpu'] = ungap(df, 'cpu')
-        df['power'] = ungap(df, 'power')
-        df['power_max'] = ungap(df, 'power_max')
+    if strat_ungap == STRAT_UNGAP_KNN:
+        df['cpu'] = ungap_knn(df, 'cpu', 8, 0.25)
+        df['power'] = ungap_knn(df, 'power', 8, 0.25)
+        df['power_max'] = ungap_knn(df, 'power_max', 8, 0.25)
+    elif strat_ungap == STRAT_UNGAP_MICE:
+        df['cpu'] = ungap_mice(df, 'cpu', 16, 0.5)
+        df['power'] = ungap_mice(df, 'power', 16, 0.5)
+        df['power_max'] = ungap_mice(df, 'power_max', 16, 0.5)
+    elif strat_ungap == STRAT_UNGAP_PERIODIC:
+        df['cpu'] = ungap_periodic(df, 'cpu', 0.5)
+        df['power'] = ungap_periodic(df, 'power', 0.5)
+        df['power_max'] = ungap_periodic(df, 'power_max', 0.5)
     elif strat_ungap == STRAT_INTERPOLATE:
         df['cpu'] = df['cpu'].interpolate(method='time').round(2)
         df['power'] = df['power'].interpolate(method='time').round(2)

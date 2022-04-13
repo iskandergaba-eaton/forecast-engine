@@ -9,12 +9,20 @@ patch_sklearn()
 # Mertrics
 from sklearn.metrics import r2_score, median_absolute_error, mean_absolute_error
 from sklearn.metrics import mean_squared_error
+
+# Imputation
+from sklearn.impute import KNNImputer
+
+# Peaks
 from scipy.signal import find_peaks, find_peaks_cwt, peak_prominences
 
 # Core libraries
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+
+# FancyImpute
+from fancyimpute import IterativeImputer
 
 # Plotting
 import matplotlib.pyplot as plt
@@ -276,12 +284,12 @@ def split_sequence(sequence, n_steps):
 
 # Time series gap handling
 ## Handle gaps
-def ungap(df, col_name):
-    ts = df[col_name]
+def ungap_periodic(df, colname, weight):
+    ts = df[colname]
     ts_work = ts.copy()
     ts_periods = ts.copy().interpolate(method='time').round(2).fillna(0)
     periods = get_periods(ts_periods, min_strength=0.6, all=False)
-    gaps = _detect_gaps(ts_work, col_name)
+    gaps = _detect_gaps(ts_work, colname)
     gaps_start, gaps_end = gaps['start'], gaps['end']
     if len(periods) > 0:
         period = periods[0]
@@ -298,26 +306,67 @@ def ungap(df, col_name):
                     s += l
                     length -= l
     ts_work = ts_work.interpolate(method='time')
-    ts_work = add_noise(ts_work, gaps)
-    return ts_work.round(2)
+    ts_work = add_noise(ts_work, gaps, weight)
+    return ts_work.round(3)
+
+def ungap_knn(df, colname, n_neighbors, noise_weight=0):
+    ts = df[colname]
+    imputer = KNNImputer(n_neighbors=n_neighbors)
+    ts_out = pd.Series(index=ts.index, data=imputer.fit_transform(ts.array.reshape(-1, 1)).round(3).reshape(-1))
+    # Add noise if a noise weight is specified
+    if noise_weight != 0:
+        gaps = _detect_gaps(ts, colname)
+        ts_out = add_noise(ts_out, gaps, noise_weight)
+    return ts_out
+
+def ungap_mice(df, colname, standard_length, weight): 
+    ts = df[colname]
+    ts_work = ts.copy()
+    gaps = _detect_gaps(ts_work, colname)
+    gaps_start, gaps_end = gaps['start'], gaps['end']
+    for k in range(len(gaps_start)):
+        ts_gap = ts_work[:gaps_end[k]].copy()
+        n_gaps = len(ts_work[gaps_start[k] : gaps_end[k]])
+        mice_imputer = IterativeImputer()
+        # The gap is smaller than or equal the standard length
+        if n_gaps <= standard_length: 
+            ts_pred = mice_imputer.fit_transform(np.array(ts_gap).reshape(-1,1))
+            preds_part = pd.Series(ts_pred.reshape(len(ts_gap)), index=ts_gap.index)
+            ts_work[gaps_start[k] : gaps_end[k]] = preds_part[gaps_start[k] : gaps_end[k]]
+        # The gap is greater than the standard length. Divide it into parts.
+        else:
+            ts_gap_end = np.array(ts_gap)
+            ts_gap_start = np.array(ts_work[:gaps_start[k]]).copy()
+            n_start = len(ts_gap_start)
+            n_parts = n_gaps // standard_length
+            preds = []
+            for i in range(n_parts - 1): 
+                ts_s_gap = ts_gap_end[:n_start + (i + 1) * standard_length]
+                ts_pred = mice_imputer.fit_transform(np.array(ts_s_gap).reshape(-1,1))
+                preds_part = pd.Series(ts_pred.reshape(len(ts_s_gap)), index=range(len(ts_s_gap)))
+                preds.extend(preds_part[n_start + i * standard_length : n_start + (i + 1) * standard_length])
+                ts_gap_end[n_start + i * standard_length : n_start + (i + 1) * standard_length] = preds_part[n_start + i * standard_length : n_start + (i + 1) * standard_length]
+            ts_gap_final = ts_gap_end
+            ts_pred = mice_imputer.fit_transform(np.array(ts_gap_final).reshape(-1,1))
+            pred = pd.Series(ts_pred.reshape(len(ts_gap_final)), index=range(len(ts_gap_final)))
+            preds.extend(pred[n_start + (n_parts - 1) * standard_length - 1:])
+            ts_work[gaps_start[k] : gaps_end[k]] = preds
+    ts_work = add_noise(ts_work, gaps, weight)
+    return ts_work.round(3)
 
 ## Add artificial noise
-def add_noise(ts, gaps):
+def add_noise(ts, gaps, weight):
     ts_work = ts.copy()
     gaps_start = list(gaps['start'])
     gaps_end = list(gaps['end'])
     for i in range(len(gaps_start)):
         gap = ts_work[gaps_start[i] : gaps_end[i]]
-        # If regsnr small, noise is too big
-        regsnr = max(40, np.log(np.mean(gap)))
-        signal_power = sum([math.pow(abs(gap[i]), 2) for i in range(len(gap))]) / len(gap)
-        noise_power = signal_power / (math.pow(10, regsnr / 10))
-        noise = math.sqrt(noise_power) * (np.random.uniform(-1, 1, size=len(gap)))
-        ts_work[gaps_start[i] : gaps_end[i]] = noise +  ts_work[gaps_start[i] : gaps_end[i]] 
+        norm = np.random.normal(np.mean(gap), np.std(gap), size = len(gap))
+        ts_work[gaps_start[i] : gaps_end[i]] = weight * norm + (1 - weight) * gap
     return ts_work
 
 ## Detect gaps
-def _detect_gaps(ts, col_name):
+def _detect_gaps(ts, colname):
     ts_work = ts.copy()
     ts_work[ts_work < 0] = np.nan
 
@@ -327,7 +376,7 @@ def _detect_gaps(ts, col_name):
         blocks)['timestamp'].agg(['min', 'max'])
     out.reset_index(inplace=True)
     out.rename({'min': 'start', 'max': 'end'}, axis=1, inplace=True)
-    out.drop(col_name, axis=1, inplace=True)
+    out.drop(colname, axis=1, inplace=True)
     return out
 
 ## Differencing method for time series 
