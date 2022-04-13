@@ -10,6 +10,9 @@ patch_sklearn()
 from sklearn.metrics import r2_score, median_absolute_error, mean_absolute_error
 from sklearn.metrics import mean_squared_error
 
+# Imputation
+from sklearn.impute import KNNImputer
+
 # Peaks
 from scipy.signal import find_peaks, find_peaks_cwt, peak_prominences
 
@@ -305,6 +308,16 @@ def ungap_periodic(df, colname, weight):
     ts_work = ts_work.interpolate(method='time')
     ts_work = add_noise(ts_work, gaps, weight)
     return ts_work.round(3)
+
+def ungap_knn(df, colname, n_neighbors, noise_weight=0):
+    ts = df[colname]
+    imputer = KNNImputer(n_neighbors=n_neighbors)
+    ts_out = pd.Series(index=ts.index, data=imputer.fit_transform(ts.array.reshape(-1, 1)).round(3).reshape(-1))
+    # Add noise if a noise weight is specified
+    if noise_weight != 0:
+        gaps = _detect_gaps(ts, colname)
+        ts_out = add_noise(ts_out, gaps, noise_weight)
+    return ts_out
 
 def ungap_mice(df, colname, standard_length, weight): 
     ts = df[colname]
