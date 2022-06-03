@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from util import ungap_knn, ungap_periodic, ungap_mice
+from util import filter_outliers, ungap_knn, ungap_periodic, ungap_mice
 from sklearn.preprocessing import MultiLabelBinarizer
 
 
@@ -79,7 +79,7 @@ CLEAN_INCREMENT = 1
 
 # Initial variables
 root_dirty, root_clean = '../data/dirty', '../data/clean'
-versions = ['20-12-2021', '12-01-2022', '19-02-2022', '01-04-2022', '07-04-2022']
+versions = ['20-12-2021', '12-01-2022', '19-02-2022', '01-04-2022', '07-04-2022', '03-06-2022']
 server_on, server_off = {}, {}
 start_times, end_times = {}, {}
 files_dirty = []
@@ -192,8 +192,12 @@ for filename in files_dirty:
     if 'cpux100' in df.columns:
         df['cpux100'] /= 100
 
-    # Resample data
     ts_power = df['power'].copy()
+
+    # Remove outlier values (measurement errors)
+    ts_power = filter_outliers(ts_power, p1=0.25, p3=0.75, whisker_width=1.5)
+
+    # Resample data
     df = df.resample(freq).agg(np.mean)
     df['power_max'] = ts_power.resample(freq).agg(np.max)
     df.index.freq = freq
