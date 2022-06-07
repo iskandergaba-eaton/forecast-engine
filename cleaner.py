@@ -88,7 +88,7 @@ files_dirty = []
 v_idx = -1
 
 # Choose ungapping strategy
-strat_ungap = STRAT_UNGAP_KNN
+strat_ungap = STRAT_UNGAP_PERIODIC
 
 # Choose cleaning
 strat_clean = CLEAN_FULL
@@ -192,12 +192,8 @@ for filename in files_dirty:
     if 'cpux100' in df.columns:
         df['cpux100'] /= 100
 
-    ts_power = df['power'].copy()
-
-    # Remove outlier values (measurement errors)
-    ts_power = filter_outliers(ts_power, p1=0.25, p3=0.75, whisker_width=1.5)
-
     # Resample data
+    ts_power = df['power'].copy()
     df = df.resample(freq).agg(np.mean)
     df['power_max'] = ts_power.resample(freq).agg(np.max)
     df.index.freq = freq
@@ -219,7 +215,13 @@ for filename in files_dirty:
         df['cpu'] = df['cpu'].interpolate(method='time').round(2)
         df['power'] = df['power'].interpolate(method='time').round(2)
         df['power_max'] = df['power_max'].interpolate(method='time').round(2)
+    
+    # Remove outlier values (measurement errors)
+    df['cpu'] = filter_outliers(df['cpu'], p1=0.25, p3=0.75, whisker_width=1.5)
+    df['power'] = filter_outliers(df['power'], p1=0.25, p3=0.75, whisker_width=1.5)
+    df['power_max'] = filter_outliers(df['power_max'], p1=0.25, p3=0.75, whisker_width=1.5)
 
+    
     # Concatenate the previous clean values with the new ones
     if incremental_update:
         df = pd.concat([df_prev, df])
