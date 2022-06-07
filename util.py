@@ -370,7 +370,7 @@ def filter_outliers(ts, p1=0.25, p3=0.75, whisker_width=1.5):
     q1, q3 = ts_work.quantile(p1), ts_work.quantile(p3)
     iqr = q3 - q1      
     ts_work[~ts_work.between(q1 - whisker_width * iqr, q3 + whisker_width * iqr, inclusive='both')] = np.NaN
-    ts_work.interpolate(method='time').round(2)
+    ts_work = ts_work.interpolate(method='time').round(2)
     return ts_work
 
 ## Detect gaps
