@@ -187,10 +187,10 @@ for filename in files_dirty:
 
     # Start cleaning
     print('{} cleaning started...'.format(server))
-
-    # Rename columns
-    if 'cpux100' in df.columns:
-        df['cpux100'] /= 100
+    
+    # Remove outlier values (measurement errors)
+    df['cpu'] = filter_outliers(df['cpu'], p1=0.1, p3=0.9, whisker_width=7)
+    df['power'] = filter_outliers(df['power'], p1=0.1, p3=0.9, whisker_width=7)
 
     # Resample data
     ts_power = df['power'].copy()
@@ -215,12 +215,6 @@ for filename in files_dirty:
         df['cpu'] = df['cpu'].interpolate(method='time').round(2)
         df['power'] = df['power'].interpolate(method='time').round(2)
         df['power_max'] = df['power_max'].interpolate(method='time').round(2)
-    
-    # Remove outlier values (measurement errors)
-    df['cpu'] = filter_outliers(df['cpu'], p1=0.25, p3=0.75, whisker_width=1.5)
-    df['power'] = filter_outliers(df['power'], p1=0.25, p3=0.75, whisker_width=1.5)
-    df['power_max'] = filter_outliers(df['power_max'], p1=0.25, p3=0.75, whisker_width=1.5)
-
     
     # Concatenate the previous clean values with the new ones
     if incremental_update:
